@@ -27,6 +27,7 @@ from .optimize import *
 from .extract import *
 from .graph.jsonparser import *
 from .tensor import *
+from .clifford import *
 from .local_search.simulated_annealing import anneal
 from .local_search.genetic import GeneticOptimizer
 from .circuit.qasmparser import qasm
