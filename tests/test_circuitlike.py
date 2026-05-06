@@ -5,7 +5,10 @@ from fractions import Fraction
 
 from pyzx.graph.multigraph import Multigraph
 from pyzx.utils import EdgeType, VertexType
-from pyzx.circuitlike import CircuitLike, check_same_support_adjacent
+from pyzx.circuitlike import (
+    CircuitLike, check_same_support_adjacent,
+    vertical_compose, horizontal_compose,
+)
 from pyzx.paulibox import (
     generate_pauli_box, conjugate_pauli_string, _cnot_conjugate,
     identify_clifford_gate, identify_pauli_box,
@@ -30,8 +33,8 @@ class TestCircuitLike(unittest.TestCase):
         g.add_edge((a, b), EdgeType.SIMPLE)
         g.add_edge((b, c), EdgeType.SIMPLE)
 
-        cl = CircuitLike(vertices={b})
-        boundary = cl.boundary_edges(g)
+        cl = CircuitLike(vertices={b}, g=g)
+        boundary = cl.boundary_edges()
         self.assertEqual(len(boundary), 2)
 
     def test_internal_edges(self):
@@ -43,8 +46,8 @@ class TestCircuitLike(unittest.TestCase):
         g.add_edge((a, b), EdgeType.SIMPLE)
         g.add_edge((b, c), EdgeType.SIMPLE)
 
-        cl = CircuitLike(vertices={a, b})
-        internal = cl.internal_edges(g)
+        cl = CircuitLike(vertices={a, b}, g=g)
+        internal = cl.internal_edges()
         self.assertEqual(len(internal), 1)
 
     def test_validate_max_two_per_qubit(self):
@@ -64,9 +67,10 @@ class TestCircuitLike(unittest.TestCase):
 
         cl = CircuitLike(
             vertices={a, b, c, d},
+            g=g,
             edge_labels={e_ab: 0, e_bc: 0, e_bd: 0},  # 3 edges on qubit 0 at vertex b
         )
-        errors = cl.validate(g)
+        errors = cl.validate()
         self.assertTrue(any("qubit 0" in e for e in errors))
 
     def test_validate_clean(self):
@@ -83,11 +87,11 @@ class TestCircuitLike(unittest.TestCase):
 
         cl = CircuitLike(
             vertices={b},
-            input_edges={e_in},
-            output_edges={e_out},
-            edge_labels={e_in: 0, e_out: 0},
+            g=g,
+            input_edges={0: e_in},
+            output_edges={0: e_out},
         )
-        errors = cl.validate(g)
+        errors = cl.validate()
         self.assertEqual(errors, [])
 
 
@@ -110,15 +114,15 @@ class TestSameSupportAdjacent(unittest.TestCase):
 
         cl_b = CircuitLike(
             vertices={b},
-            input_edges={e_ab},
-            output_edges={e_bc},
-            edge_labels={e_ab: 0, e_bc: 0},
+            g=g,
+            input_edges={0: e_ab},
+            output_edges={0: e_bc},
         )
         cl_c = CircuitLike(
             vertices={c},
-            input_edges={e_bc},
-            output_edges={e_cd},
-            edge_labels={e_bc: 0, e_cd: 0},
+            g=g,
+            input_edges={0: e_bc},
+            output_edges={0: e_cd},
         )
 
         result = check_same_support_adjacent(cl_b, cl_c)
@@ -145,15 +149,15 @@ class TestSameSupportAdjacent(unittest.TestCase):
 
         cl_b = CircuitLike(
             vertices={b},
-            input_edges={e_ab},
-            output_edges={e_b_mid},
-            edge_labels={e_ab: 0, e_b_mid: 0},
+            g=g,
+            input_edges={0: e_ab},
+            output_edges={0: e_b_mid},
         )
         cl_c = CircuitLike(
             vertices={c},
-            input_edges={e_mid_c},
-            output_edges={e_cd},
-            edge_labels={e_mid_c: 0, e_cd: 0},
+            g=g,
+            input_edges={0: e_mid_c},
+            output_edges={0: e_cd},
         )
 
         result = check_same_support_adjacent(cl_b, cl_c)
@@ -182,21 +186,15 @@ class TestSameSupportAdjacent(unittest.TestCase):
 
         cl_left = CircuitLike(
             vertices={b0, b1},
-            input_edges={next(g.edges(a0, b0)), next(g.edges(a1, b1))},
-            output_edges={e_b0c0, e_b1c1},
-            edge_labels={
-                next(g.edges(a0, b0)): 0, e_b0c0: 0,
-                next(g.edges(a1, b1)): 1, e_b1c1: 1,
-            },
+            g=g,
+            input_edges={0: next(g.edges(a0, b0)), 1: next(g.edges(a1, b1))},
+            output_edges={0: e_b0c0, 1: e_b1c1},
         )
         cl_right = CircuitLike(
             vertices={c0, c1},
-            input_edges={e_b0c0, e_b1c1},
-            output_edges={next(g.edges(c0, d0)), next(g.edges(c1, d1))},
-            edge_labels={
-                e_b0c0: 0, next(g.edges(c0, d0)): 0,
-                e_b1c1: 1, next(g.edges(c1, d1)): 1,
-            },
+            g=g,
+            input_edges={0: e_b0c0, 1: e_b1c1},
+            output_edges={0: next(g.edges(c0, d0)), 1: next(g.edges(c1, d1))},
         )
 
         result = check_same_support_adjacent(cl_left, cl_right)
@@ -219,15 +217,15 @@ class TestSameSupportAdjacent(unittest.TestCase):
         # Left labels the edge as qubit 5, right labels it as qubit 3
         cl_left = CircuitLike(
             vertices={b},
-            input_edges={next(g.edges(a, b))},
-            output_edges={e_bc},
-            edge_labels={next(g.edges(a, b)): 5, e_bc: 5},
+            g=g,
+            input_edges={5: next(g.edges(a, b))},
+            output_edges={5: e_bc},
         )
         cl_right = CircuitLike(
             vertices={c},
-            input_edges={e_bc},
-            output_edges={next(g.edges(c, d))},
-            edge_labels={e_bc: 3, next(g.edges(c, d)): 3},
+            g=g,
+            input_edges={3: e_bc},
+            output_edges={3: next(g.edges(c, d))},
         )
 
         result = check_same_support_adjacent(cl_left, cl_right)
@@ -275,14 +273,14 @@ class TestGeneratePauliBox(unittest.TestCase):
     def test_neutral_boundary_edge(self):
         """Pauli box has 1 neutral boundary edge (the phase leg)."""
         g, cl = generate_pauli_box("ZZ")
-        neutral = cl.neutral_edges(g)
+        neutral = cl.neutral_edges()
         self.assertEqual(len(neutral), 1)
 
     def test_validation_passes(self):
         """Generated Pauli box should pass validation."""
         for ps in ["Z", "X", "Y", "XZ", "XYZI"]:
             g, cl = generate_pauli_box(ps)
-            errors = cl.validate(g)
+            errors = cl.validate()
             self.assertEqual(errors, [], f"Validation failed for {ps}: {errors}")
 
 
@@ -340,9 +338,9 @@ class TestIdentifyCliffordGate(unittest.TestCase):
 
         cl = CircuitLike(
             vertices={h},
-            input_edges={e_in},
-            output_edges={e_out},
-            edge_labels={e_in: 0, e_out: 0},
+            g=g,
+            input_edges={0: e_in},
+            output_edges={0: e_out},
         )
         result = identify_clifford_gate(g, cl)
         self.assertIsNotNone(result)
@@ -365,9 +363,9 @@ class TestIdentifyCliffordGate(unittest.TestCase):
 
         cl = CircuitLike(
             vertices={s},
-            input_edges={e_in},
-            output_edges={e_out},
-            edge_labels={e_in: 0, e_out: 0},
+            g=g,
+            input_edges={0: e_in},
+            output_edges={0: e_out},
         )
         result = identify_clifford_gate(g, cl)
         self.assertIsNotNone(result)
@@ -396,9 +394,9 @@ class TestIdentifyCliffordGate(unittest.TestCase):
 
         cl = CircuitLike(
             vertices={z, x},
-            input_edges={e_in0, e_in1},
-            output_edges={e_out0, e_out1},
-            edge_labels={e_in0: 0, e_out0: 0, e_in1: 1, e_out1: 1},
+            g=g,
+            input_edges={0: e_in0, 1: e_in1},
+            output_edges={0: e_out0, 1: e_out1},
         )
         result = identify_clifford_gate(g, cl)
         self.assertIsNotNone(result)
@@ -475,17 +473,13 @@ def _build_h_next_to_pauli(pauli_string):
     # Build the Clifford CircuitLike
     clifford_cl = CircuitLike(
         vertices={h},
-        input_edges={e_upstream_h},
-        output_edges={e_h_pauli},
-        edge_labels={e_upstream_h: 0, e_h_pauli: 0},
+        g=g,
+        input_edges={0: e_upstream_h},
+        output_edges={0: e_h_pauli},
     )
 
     # Update Pauli box CircuitLike: replace old input edge with new one
-    pauli_cl.input_edges.discard(pauli_in_edge_q0)
-    pauli_cl.input_edges.add(e_h_pauli)
-    if pauli_in_edge_q0 in pauli_cl.edge_labels:
-        del pauli_cl.edge_labels[pauli_in_edge_q0]
-    pauli_cl.edge_labels[e_h_pauli] = 0
+    pauli_cl.input_edges[0] = e_h_pauli
 
     # Collect downstream boundaries (Pauli box output boundaries)
     downstream = {}
@@ -494,7 +488,7 @@ def _build_h_next_to_pauli(pauli_string):
         downstream[q] = s if s not in pauli_cl.vertices else t
 
     # Phase boundary
-    neutral = pauli_cl.neutral_edges(g)
+    neutral = pauli_cl.neutral_edges()
     phase_boundary = None
     for e in neutral:
         s, t = g.edge_st(e)
@@ -574,6 +568,279 @@ class TestPushCliffordApply(unittest.TestCase):
             self.assertIn(b, visited,
                           f"Downstream boundary on qubit {q} not reachable")
         self.assertIn(phase_b, visited, "Phase boundary not reachable")
+
+
+class TestVerticalCompose(unittest.TestCase):
+
+    def test_merge_disjoint_single_qubit(self):
+        """Merge two 1-qubit CircuitLikes on different wires."""
+        g = _new_graph()
+        # Wire 0: a0 -> b0 -> c0
+        a0 = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+        b0 = g.add_vertex(VertexType.Z, qubit=0, row=1)
+        c0 = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=2)
+        g.add_edge((a0, b0), EdgeType.SIMPLE)
+        g.add_edge((b0, c0), EdgeType.SIMPLE)
+        e_in0 = next(g.edges(a0, b0))
+        e_out0 = next(g.edges(b0, c0))
+
+        # Wire 1: a1 -> b1 -> c1
+        a1 = g.add_vertex(VertexType.BOUNDARY, qubit=1, row=0)
+        b1 = g.add_vertex(VertexType.Z, qubit=1, row=1)
+        c1 = g.add_vertex(VertexType.BOUNDARY, qubit=1, row=2)
+        g.add_edge((a1, b1), EdgeType.SIMPLE)
+        g.add_edge((b1, c1), EdgeType.SIMPLE)
+        e_in1 = next(g.edges(a1, b1))
+        e_out1 = next(g.edges(b1, c1))
+
+        cl_a = CircuitLike(vertices={b0}, g=g, input_edges={0: e_in0}, output_edges={0: e_out0})
+        cl_b = CircuitLike(vertices={b1}, g=g, input_edges={0: e_in1}, output_edges={0: e_out1})
+
+        merged = vertical_compose(cl_a, cl_b)
+        self.assertEqual(merged.vertices, {b0, b1})
+        self.assertEqual(len(merged.input_edges), 2)
+        self.assertEqual(len(merged.output_edges), 2)
+        # B's qubit 0 should be shifted to 1 (collision with A's 0)
+        self.assertIn(0, merged.input_edges)
+        self.assertIn(1, merged.input_edges)
+
+    def test_merge_no_collision(self):
+        """When qubit labels don't collide, no shift is applied."""
+        g = _new_graph()
+        a = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+        b = g.add_vertex(VertexType.Z, qubit=0, row=1)
+        c = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=2)
+        g.add_edge((a, b), EdgeType.SIMPLE)
+        g.add_edge((b, c), EdgeType.SIMPLE)
+
+        d = g.add_vertex(VertexType.BOUNDARY, qubit=1, row=0)
+        e_v = g.add_vertex(VertexType.Z, qubit=1, row=1)
+        f = g.add_vertex(VertexType.BOUNDARY, qubit=1, row=2)
+        g.add_edge((d, e_v), EdgeType.SIMPLE)
+        g.add_edge((e_v, f), EdgeType.SIMPLE)
+
+        cl_a = CircuitLike(vertices={b}, g=g, input_edges={0: next(g.edges(a, b))},
+                           output_edges={0: next(g.edges(b, c))})
+        cl_b = CircuitLike(vertices={e_v}, g=g, input_edges={5: next(g.edges(d, e_v))},
+                           output_edges={5: next(g.edges(e_v, f))})
+
+        merged = vertical_compose(cl_a, cl_b)
+        # No collision: B keeps its qubit label 5
+        self.assertIn(5, merged.input_edges)
+        self.assertIn(5, merged.output_edges)
+
+    def test_merge_overlapping_vertices_raises(self):
+        """Merging with overlapping vertex sets raises ValueError."""
+        g = _new_graph()
+        cl = CircuitLike(vertices={1, 2}, g=g)
+        with self.assertRaises(ValueError):
+            vertical_compose(cl, cl)
+
+    def test_merge_shared_wire_cnot(self):
+        """Two CNOTs sharing a wire: edge becomes both input and output."""
+        g = _new_graph()
+        # CNOT_top: Z(q0) -- X(q1), on wires 0 and 1
+        b_in0 = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+        b_in1 = g.add_vertex(VertexType.BOUNDARY, qubit=1, row=0)
+        z_top = g.add_vertex(VertexType.Z, qubit=0, row=1, phase=0)
+        x_top = g.add_vertex(VertexType.X, qubit=1, row=1, phase=0)
+        b_out0 = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=2)
+        g.add_edge((b_in0, z_top), EdgeType.SIMPLE)
+        g.add_edge((b_in1, x_top), EdgeType.SIMPLE)
+        g.add_edge((z_top, x_top), EdgeType.SIMPLE)
+        g.add_edge((z_top, b_out0), EdgeType.SIMPLE)
+
+        # CNOT_bottom: Z(q1) -- X(q2), on wires 1 and 2
+        z_bot = g.add_vertex(VertexType.Z, qubit=1, row=1, phase=0)
+        x_bot = g.add_vertex(VertexType.X, qubit=2, row=1, phase=0)
+        b_in2 = g.add_vertex(VertexType.BOUNDARY, qubit=2, row=0)
+        b_out1 = g.add_vertex(VertexType.BOUNDARY, qubit=1, row=2)
+        b_out2 = g.add_vertex(VertexType.BOUNDARY, qubit=2, row=2)
+        # Shared wire: x_top -> z_bot
+        g.add_edge((x_top, z_bot), EdgeType.SIMPLE)
+        g.add_edge((b_in2, x_bot), EdgeType.SIMPLE)
+        g.add_edge((z_bot, x_bot), EdgeType.SIMPLE)
+        g.add_edge((z_bot, b_out1), EdgeType.SIMPLE)
+        g.add_edge((x_bot, b_out2), EdgeType.SIMPLE)
+
+        e_shared = next(g.edges(x_top, z_bot))
+
+        cl_top = CircuitLike(
+            vertices={z_top, x_top},
+            g=g,
+            input_edges={0: next(g.edges(b_in0, z_top)), 1: next(g.edges(b_in1, x_top))},
+            output_edges={0: next(g.edges(z_top, b_out0)), 1: e_shared},
+        )
+        cl_bot = CircuitLike(
+            vertices={z_bot, x_bot},
+            g=g,
+            input_edges={0: e_shared, 1: next(g.edges(b_in2, x_bot))},
+            output_edges={0: next(g.edges(z_bot, b_out1)), 1: next(g.edges(x_bot, b_out2))},
+        )
+
+        merged = vertical_compose(cl_top, cl_bot)
+
+        # 4 qubits total
+        self.assertEqual(len(merged.input_edges), 4)
+        self.assertEqual(len(merged.output_edges), 4)
+        self.assertEqual(merged.vertices, {z_top, x_top, z_bot, x_bot})
+
+        # The shared edge appears in both input and output
+        shared_in_inputs = e_shared in merged.input_edges.values()
+        shared_in_outputs = e_shared in merged.output_edges.values()
+        self.assertTrue(shared_in_inputs)
+        self.assertTrue(shared_in_outputs)
+
+        # Validation should pass (IO edges can be internal after merge)
+        errors = merged.validate()
+        self.assertEqual(errors, [], f"Validation errors: {errors}")
+
+    def test_merge_edge_labels_shifted(self):
+        """Internal edge labels from B are shifted along with IO labels."""
+        g = _new_graph()
+        a = g.add_vertex(VertexType.Z, qubit=0, row=0)
+        b = g.add_vertex(VertexType.Z, qubit=0, row=1)
+        c = g.add_vertex(VertexType.Z, qubit=1, row=0)
+        d = g.add_vertex(VertexType.Z, qubit=1, row=1)
+        e_ab = g.add_edge((a, b), EdgeType.SIMPLE)
+        e_cd = g.add_edge((c, d), EdgeType.SIMPLE)
+        e_ab = next(g.edges(a, b))
+        e_cd = next(g.edges(c, d))
+
+        cl_a = CircuitLike(vertices={a, b}, g=g, edge_labels={e_ab: 0})
+        cl_b = CircuitLike(vertices={c, d}, g=g, edge_labels={e_cd: 0})
+
+        merged = vertical_compose(cl_a, cl_b)
+        # B's edge label 0 should be shifted to 1
+        self.assertEqual(merged.edge_labels[e_cd], 1)
+        self.assertEqual(merged.edge_labels[e_ab], 0)
+
+
+class TestHorizontalCompose(unittest.TestCase):
+
+    def test_compose_simple(self):
+        """Compose two 1-qubit subgraphs: A -> B."""
+        g = _new_graph()
+        a = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+        b = g.add_vertex(VertexType.Z, qubit=0, row=1)
+        c = g.add_vertex(VertexType.X, qubit=0, row=2)
+        d = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=3)
+        g.add_edge((a, b), EdgeType.SIMPLE)
+        g.add_edge((b, c), EdgeType.SIMPLE)
+        g.add_edge((c, d), EdgeType.SIMPLE)
+
+        e_ab = next(g.edges(a, b))
+        e_bc = next(g.edges(b, c))
+        e_cd = next(g.edges(c, d))
+
+        cl_a = CircuitLike(vertices={b}, g=g, input_edges={0: e_ab}, output_edges={0: e_bc})
+        cl_b = CircuitLike(vertices={c}, g=g, input_edges={0: e_bc}, output_edges={0: e_cd})
+
+        composed = horizontal_compose(cl_a, cl_b)
+        self.assertIsNotNone(composed)
+        self.assertEqual(composed.vertices, {b, c})
+        self.assertEqual(composed.input_edges, {0: e_ab})
+        self.assertEqual(composed.output_edges, {0: e_cd})
+        # Shared edge e_bc becomes internal
+        self.assertIn(e_bc, composed.edge_labels)
+        self.assertEqual(composed.edge_labels[e_bc], 0)
+
+    def test_compose_not_adjacent(self):
+        """Non-adjacent subgraphs return None."""
+        g = _new_graph()
+        a = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+        b = g.add_vertex(VertexType.Z, qubit=0, row=1)
+        mid = g.add_vertex(VertexType.Z, qubit=0, row=2)
+        c = g.add_vertex(VertexType.X, qubit=0, row=3)
+        d = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=4)
+        g.add_edge((a, b), EdgeType.SIMPLE)
+        g.add_edge((b, mid), EdgeType.SIMPLE)
+        g.add_edge((mid, c), EdgeType.SIMPLE)
+        g.add_edge((c, d), EdgeType.SIMPLE)
+
+        e_ab = next(g.edges(a, b))
+        e_b_mid = next(g.edges(b, mid))
+        e_mid_c = next(g.edges(mid, c))
+        e_cd = next(g.edges(c, d))
+
+        cl_a = CircuitLike(vertices={b}, g=g, input_edges={0: e_ab}, output_edges={0: e_b_mid})
+        cl_b = CircuitLike(vertices={c}, g=g, input_edges={0: e_mid_c}, output_edges={0: e_cd})
+
+        self.assertIsNone(horizontal_compose(cl_a, cl_b))
+
+    def test_compose_two_qubit(self):
+        """Compose two 2-qubit subgraphs."""
+        g = _new_graph()
+        # Two parallel wires: a0-b0-c0-d0 and a1-b1-c1-d1
+        a0 = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+        b0 = g.add_vertex(VertexType.Z, qubit=0, row=1)
+        c0 = g.add_vertex(VertexType.X, qubit=0, row=2)
+        d0 = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=3)
+        a1 = g.add_vertex(VertexType.BOUNDARY, qubit=1, row=0)
+        b1 = g.add_vertex(VertexType.Z, qubit=1, row=1)
+        c1 = g.add_vertex(VertexType.X, qubit=1, row=2)
+        d1 = g.add_vertex(VertexType.BOUNDARY, qubit=1, row=3)
+
+        for s, t in [(a0, b0), (b0, c0), (c0, d0),
+                     (a1, b1), (b1, c1), (c1, d1)]:
+            g.add_edge((s, t), EdgeType.SIMPLE)
+
+        e_b0c0 = next(g.edges(b0, c0))
+        e_b1c1 = next(g.edges(b1, c1))
+
+        cl_left = CircuitLike(
+            vertices={b0, b1},
+            g=g,
+            input_edges={0: next(g.edges(a0, b0)), 1: next(g.edges(a1, b1))},
+            output_edges={0: e_b0c0, 1: e_b1c1},
+        )
+        cl_right = CircuitLike(
+            vertices={c0, c1},
+            g=g,
+            input_edges={0: e_b0c0, 1: e_b1c1},
+            output_edges={0: next(g.edges(c0, d0)), 1: next(g.edges(c1, d1))},
+        )
+
+        composed = horizontal_compose(cl_left, cl_right)
+        self.assertIsNotNone(composed)
+        self.assertEqual(composed.vertices, {b0, b1, c0, c1})
+        self.assertEqual(len(composed.input_edges), 2)
+        self.assertEqual(len(composed.output_edges), 2)
+        # Shared edges become internal
+        self.assertIn(e_b0c0, composed.edge_labels)
+        self.assertIn(e_b1c1, composed.edge_labels)
+
+    def test_compose_swapped_qubits(self):
+        """Compose with different qubit labeling: result uses A's labels."""
+        g = _new_graph()
+        a = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+        b = g.add_vertex(VertexType.Z, qubit=0, row=1)
+        c = g.add_vertex(VertexType.X, qubit=0, row=2)
+        d = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=3)
+        g.add_edge((a, b), EdgeType.SIMPLE)
+        g.add_edge((b, c), EdgeType.SIMPLE)
+        g.add_edge((c, d), EdgeType.SIMPLE)
+
+        e_bc = next(g.edges(b, c))
+
+        cl_left = CircuitLike(
+            vertices={b},
+            g=g,
+            input_edges={5: next(g.edges(a, b))},
+            output_edges={5: e_bc},
+        )
+        cl_right = CircuitLike(
+            vertices={c},
+            g=g,
+            input_edges={3: e_bc},
+            output_edges={3: next(g.edges(c, d))},
+        )
+
+        composed = horizontal_compose(cl_left, cl_right)
+        self.assertIsNotNone(composed)
+        # Output uses A's qubit label (5), not B's (3)
+        self.assertIn(5, composed.output_edges)
+        self.assertNotIn(3, composed.output_edges)
 
 
 if __name__ == '__main__':

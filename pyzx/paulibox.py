@@ -18,7 +18,7 @@ from typing import Optional
 
 from pyzx.graph.base import BaseGraph, VT, ET
 from pyzx.utils import EdgeType, VertexType, set_h_box_label
-from pyzx.circuitlike import CircuitLike
+from pyzx.circuitlike import CircuitLike, PauliBox
 
 
 def generate_pauli_box(
@@ -26,7 +26,7 @@ def generate_pauli_box(
     g: Optional[BaseGraph] = None,
     start_row: float = 0,
     start_qubit: float = 0,
-) -> tuple[BaseGraph, CircuitLike]:
+) -> tuple[BaseGraph, PauliBox]:
     """Generate a Pauli box for the given Pauli string.
 
     Args:
@@ -50,8 +50,8 @@ def generate_pauli_box(
         g.set_auto_simplify(False)
 
     n = len(pauli_string)
-    input_edges: set[ET] = set()
-    output_edges: set[ET] = set()
+    input_edges: dict[int, ET] = {}
+    output_edges: dict[int, ET] = {}
     edge_labels: dict[ET, int] = {}
     vertices: set[VT] = set()
 
@@ -129,10 +129,11 @@ def generate_pauli_box(
         # Input/output edges
         e_in = list(g.edges(b_in, next(_first_neighbor(g, b_in))))[0]
         e_out = _add_simple_edge(g, prev, b_out)
-        input_edges.add(e_in)
-        output_edges.add(e_out)
-        edge_labels[e_in] = i
-        edge_labels[e_out] = i
+        input_edges[i] = e_in
+        output_edges[i] = e_out
+        # Remove from edge_labels — input/output edges carry their
+        # qubit label in the input_edges/output_edges dicts instead
+        edge_labels.pop(e_in, None)
 
     # Central X spider at col_post, above the top wire
     x_spider = g.add_vertex(VertexType.X, qubit=start_qubit - 1,
@@ -149,14 +150,16 @@ def generate_pauli_box(
                                   row=col_post)
     g.add_edge((x_spider, phase_boundary), EdgeType.SIMPLE)
 
-    cl = CircuitLike(
+    pb = PauliBox(
         vertices=vertices,
+        g=g,
         input_edges=input_edges,
         output_edges=output_edges,
         edge_labels=edge_labels,
+        pauli_string=pauli_string.upper(),
     )
 
-    return g, cl
+    return g, pb
 
 
 def identify_clifford_gate(
